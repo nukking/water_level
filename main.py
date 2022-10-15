@@ -141,16 +141,16 @@ def monitor():
         con.close()
     if(v1 > vv1_high or app.water_level[0] > vv1_high):
         send_telegram_message(message = f'[E2] : 출입구 아래 수위 높음, v1:{v1}, wl1:{app.water_level[0]}')
-        switch_on(user_id = 'AI', site = 1, message = '')
+        switch_on(user_id = 'AI', site_index = 0, message = '')
     if(v1 < vv1_low or app.water_level[0] < vv1_low):
         send_telegram_message(message = f'[E3] : 출입구 아래 수위 낮음, v1:{v1}, wl1:{app.water_level[0]}')
-        switch_off(user_id = 'AI', site = 1, message = '')
+        switch_off(user_id = 'AI', site_index = 0, message = '')
     if(v2 > vv2_high or app.water_level[1] > vv2_high):
         send_telegram_message(message = f'[E2] : 주방 아래 수위 높음, v2:{v2}, wl2:{app.water_level[1]}')
-        switch_on(user_id = 'AI', site = 2, message = '')
+        switch_on(user_id = 'AI', site_index = 1, message = '')
     if(v2 < vv2_low or app.water_level[1] < vv2_low):
         send_telegram_message(message = f'[E3] : 주방 아래 수위 낮음, v2:{v2}, wl2:{app.water_level[1]}')
-        switch_off(user_id = 'AI', site = 2, message = '')
+        switch_off(user_id = 'AI', site_index = 1, message = '')
 
 def sensing():
     if app.ser.in_waiting > 0:
@@ -168,14 +168,14 @@ def control(site : str = '0'):
     water_level = app.water_level[site_index]
     if(app.status[site_index] == 'off'):
         if GPIO.input(app.pin[site_index]) == GPIO.HIGH:
-            print(f'control{site} status changed on - status not matched')
+            print(f'control{site_index} status changed on - status not matched')
             app.status[site_index] = 'on'
     if(app.status[site_index] == 'on'):
         app.on_count[site_index] += 1
         if(app.on_count[1] > app.on_count_limit):
             app.status[site_index] = 'off'
-            switch_off(user_id = 'AI', site = site, message = ', 시간제한')
-            print(f'control{site} turned off - time limit')
+            switch_off(user_id = 'AI', site_index = site_index, message = ', 시간제한')
+            print(f'control{site_index} turned off - time limit')
             app.on_count[site_index] = 0
             return
         else:
@@ -183,8 +183,8 @@ def control(site : str = '0'):
                 app.low_limit_count[site_index] += 1
                 if(app.low_limit_count[site_index] > app.limit_count):
                     app.status[site_index] = 'off'
-                    switch_off(user_id = 'AI', site = site, message = f', 현재수위 {water_level}')
-                    print(f'control{site} turned off - low water level')
+                    switch_off(user_id = 'AI', site_index = site_index, message = f', 현재수위 {water_level}')
+                    print(f'control{site_index} turned off - low water level')
                     app.low_limit_count[site_index] = 0
             else:
                 if(app.low_limit_count[1] > 0):
@@ -197,16 +197,16 @@ def control(site : str = '0'):
             app.high_limit_count[site_index] += 1
             if(app.high_limit_count[site_index] > app.limit_count):
                 app.status[site_index] = 'on'
-                switch_on(user_id = 'AI', site = site, message = f', 현재수위 {water_level}')
-                print(f'control{site} turned on - high water level')
+                switch_on(user_id = 'AI', site_index = site_index, message = f', 현재수위 {water_level}')
+                print(f'control{site_index} turned on - high water level')
                 app.high_limit_count[site_index] = 0
         else:
             if(app.high_limit_count[site_index] > 0):
                 app.high_limit_count[site_index] = 0
         return
 def daily_check():
-    switch_check(site = '1')
-    switch_check(site = '2')
+    switch_check(site_index = 0)
+    switch_check(site_index = 1)
 
 def tests():
     send_telegram_message(message = 'test!!')
@@ -225,9 +225,8 @@ app.scheduler.start()
 def read_root():
     return 'Hello World'
 
-@app.get("/switch-on/{site}")
-def switch_on(site : str = '', user_id : str = 'AI', message : str = ''):
-    site_index = int(site) - 1
+@app.get("/switch-on/{site_index}")
+def switch_on(site_index : int = 2, user_id : str = 'AI', message : str = ''):
     is_possible = False
     site_pin = app.pin[site_index]
     site_name = app.site_name[site_index]
@@ -240,7 +239,7 @@ def switch_on(site : str = '', user_id : str = 'AI', message : str = ''):
         #현재 수위가 OFF 기준보다 낮으면 실행 불가
         if(is_possible):
             GPIO.output(site_pin, GPIO.HIGH)
-            save_pump_logs(site = site, event = 'on', user_id = user_id)
+            save_pump_logs(site = str(site_index+1), event = 'on', user_id = user_id)
             if(message == ''):
                 message  = f', 현재수위 {water_level}'
             if(user_id != 'AI'):
@@ -252,11 +251,10 @@ def switch_on(site : str = '', user_id : str = 'AI', message : str = ''):
     app.status[site_index] = 'on'
     app.last_on_time[site_index] = datetime.now() - timedelta(hours=9)
 
-    return {"site": site, "switch": 'on'}
+    return {"site": str(site_index), "switch": 'on'}
 
-@app.get("/switch-off/{site}")
-def switch_off(site : str = '', user_id : str = 'AI', message : str = ''):
-    site_index = int(site) - 1
+@app.get("/switch-off/{site_index}")
+def switch_off(site_index : int = 2, user_id : str = 'AI', message : str = ''):
     is_possible = False
     site_pin = app.pin[site_index]
     site_name = app.site_name[site_index]
@@ -265,29 +263,27 @@ def switch_off(site : str = '', user_id : str = 'AI', message : str = ''):
     if(len(str(site_pin)) > 0):
         if GPIO.input(site_pin) == GPIO.HIGH:
             GPIO.output(site_pin, GPIO.LOW)
-            save_pump_logs(site = site, event = 'off', user_id = user_id)
+            save_pump_logs(site = str(site_index+1), event = 'off', user_id = user_id)
             if(message == ''):
                 message  = f', 현재수위 {water_level}'
             if(user_id != 'AI'):
                 send_telegram_message(message = f'[{site_name}] 펌프 OFF({user_id}{message})')
         else:
             GPIO.output(site_pin, GPIO.LOW)
-            if(user_id != 'AI'):
-                send_telegram_message(message = f'[{site_name}] 펌프 OFF 불가(현재 OFF)')
-            return
+            send_telegram_message(message = f'[{site_name}] 펌프 OFF 불가(현재 OFF)')
+            return {"message": 'switch OFF'}
     app.status[site_index] = 'off'
     app.last_off_time[site_index] = datetime.now() - timedelta(hours=9)
 
-    return {"site": site, "switch": 'off'}
+    return {"site": str(site_index), "switch": 'off'}
 
-@app.get("/switch-check/{site}")
-def switch_check(site : str = '', user_id : str = 'AI', message : str = ''):
-    site_index = int(site) - 1
+@app.get("/switch-check/{site_index}")
+def switch_check(site_index : int = 2, user_id : str = 'AI', message : str = ''):
     start_level = get_average_water_level(site_index = site_index, second = 3)
     if start_level > app.test_start_limit[site_index]:
-        switch_on(user_id = user_id, site = site, message = message)
+        switch_on(user_id = user_id, site_index = site_index, message = message)
         time.sleep(app.test_sleep_seconds[site_index])
-        switch_off(user_id = user_id, site = site, message = message)
+        switch_off(user_id = user_id, site_index = site_index, message = message)
         pump_stop_level = get_average_water_level(site_index = site_index, second = 3)
         time.sleep(5)
         end_level = get_average_water_level(site_index = site_index, second = 3)
@@ -301,24 +297,22 @@ def switch_check(site : str = '', user_id : str = 'AI', message : str = ''):
 def get_statuses():
     s0 = 'on' if GPIO.input(app.pin[0]) == GPIO.HIGH else 'off'
     s1 = 'on' if GPIO.input(app.pin[1]) == GPIO.HIGH else 'off'
-    return {"switch1": s0,"switch2": s1,"water_level_1":app.water_level[0],"water_level_2":app.water_level[1]}
+    return {"switch1" : s0, "switch2" : s1, "water_level_1" : app.water_level[0] , "water_level_2" : app.water_level[1]}
 
-@app.get("/last_on_time/{site}")
-def get_last_on_time(site : str):
-    return app.last_on_time[0] if site == '1' else app.last_on_time[1]
+@app.get("/last_on_time/{site_index}")
+def get_last_on_time(site_index : int):
+    return app.last_on_time[site_index]
 
-@app.get("/last_off_time/{site}")
-def get_last_off_time(site : str):
-    return app.last_off_time[0] if site == '1' else app.last_off_time[1]
+@app.get("/last_off_time/{site_index}")
+def get_last_off_time(site_index : int):
+    return app.last_off_time[site_index]
 
-@app.get("/set_on/{site}/{high}")
-def set_on(site: str, high: int):
-    site_index = int(site) - 1
+@app.get("/set_on/{site_index}/{high}")
+def set_on(site_index: int, high: int):
     app.on_value[site_index] = high        # 스위치 on 되는 수치
-    return {"on_value[0]": app.on_value[0],"on_value[1]": app.on_value[1]}
+    return {"on_value[0]" : app.on_value[0], "on_value[1]" : app.on_value[1]}
 
-@app.get("/set_off/{site}/{low}")
-def set_off(site: str, low: int):
-    site_index = int(site) - 1
+@app.get("/set_off/{site_index}/{low}")
+def set_off(site_index: int, low: int):
     app.off_value[site_index] = low        # 스위치 off 되는 수치
-    return {"off_value[0]": app.off_value[0],"off_value[1]": app.off_value[1]}
+    return {"off_value[0]" : app.off_value[0], "off_value[1]" : app.off_value[1]}
