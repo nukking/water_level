@@ -71,7 +71,7 @@ app.on_value = [180,130]    # 스위치 on 되는 default 수치
 app.off_value = [90,70]     # 스위치 off 되는 default 수치
 app.limit_count = 2         # 1회성 수치에 동작 방지를 위한 연속 수치도달 카운터, 변수값만큼 반복 시 스위치 온/오프
 app.test_start_limit = [110,90] # 점검 시작 가능 수위 
-app.test_sleep_seconds = [5,8]  # 점검 시 펌프 가동 시간 초
+app.test_sleep_seconds = [8,11]  # 점검 시 펌프 가동 시간 초
 
 # variable init
 app.status = ['off','off']      # 모터 상태 변수 on/off
@@ -204,6 +204,12 @@ def control(site : str = '0'):
             if(app.high_limit_count[site_index] > 0):
                 app.high_limit_count[site_index] = 0
         return
+def daily_check():
+    switch_check(site = '1')
+    switch_check(site = '2')
+
+def tests():
+    send_telegram_message(message = 'test!!')
 
 # scheduler settings
 app.scheduler = AsyncIOScheduler({'apscheduler.job_defaults.max_instances': 5})
@@ -211,6 +217,7 @@ app.scheduler.add_job(sensing, 'interval', seconds = 0.5)
 app.scheduler.add_job(monitor, 'interval', seconds = 20)
 app.scheduler.add_job(control, 'interval', seconds = 1, args = ('1'))
 app.scheduler.add_job(control, 'interval', seconds = 1, args = ('2'))
+app.scheduler.add_job(daily_check, 'cron', hour='6', minute='0')
 app.scheduler.start()
 
 # web services
@@ -273,8 +280,8 @@ def switch_off(site : str = '', user_id : str = 'AI', message : str = ''):
 
     return {"site": site, "switch": 'off'}
 
-@app.get("/switch-test/{site}")
-def switch_test(site : str = '', user_id : str = 'AI', message : str = ''):
+@app.get("/switch-check/{site}")
+def switch_check(site : str = '', user_id : str = 'AI', message : str = ''):
     site_index = int(site) - 1
     start_level = get_average_water_level(site_index = site_index, second = 3)
     if start_level > app.test_start_limit[site_index]:
