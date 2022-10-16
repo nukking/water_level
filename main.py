@@ -247,9 +247,9 @@ def switch_on(site_index : int = 2, user_id : str = 'AI', message : str = ''):
         else:
             if(user_id != 'AI'):
                 send_telegram_message(message = f'[{site_name}] 펌프 ON 불가 - 수위가 낮음')
-            return
+            return {"message": 'switch OFF'}
     app.status[site_index] = 'on'
-    app.last_on_time[site_index] = datetime.now() - timedelta(hours=9)
+    app.last_on_time[site_index] = datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
 
     return {"site": str(site_index), "switch": 'on'}
 
@@ -273,20 +273,19 @@ def switch_off(site_index : int = 2, user_id : str = 'AI', message : str = ''):
             send_telegram_message(message = f'[{site_name}] 펌프 OFF 불가(현재 OFF)')
             return {"message": 'switch OFF'}
     app.status[site_index] = 'off'
-    app.last_off_time[site_index] = datetime.now() - timedelta(hours=9)
-
+    app.last_off_time[site_index] = datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
     return {"site": str(site_index), "switch": 'off'}
 
 @app.get("/switch-check/{site_index}")
 def switch_check(site_index : int = 2, user_id : str = 'AI', message : str = ''):
-    start_level = get_average_water_level(site_index = site_index, second = 3)
+    start_level = get_average_water_level(site_index = site_index, second = 4)
     if start_level > app.test_start_limit[site_index]:
         switch_on(user_id = user_id, site_index = site_index, message = message)
         time.sleep(app.test_sleep_seconds[site_index])
         switch_off(user_id = user_id, site_index = site_index, message = message)
-        pump_stop_level = get_average_water_level(site_index = site_index, second = 3)
+        pump_stop_level = get_average_water_level(site_index = site_index, second = 4)
         time.sleep(5)
-        end_level = get_average_water_level(site_index = site_index, second = 3)
+        end_level = get_average_water_level(site_index = site_index, second = 4)
         message = f'[점검 결과] 시작 : {start_level}, 중지 : {pump_stop_level}, 종료 : {end_level}'
     else:
         message = f'수위 기준 이하 : {start_level}'
